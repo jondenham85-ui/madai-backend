@@ -15,23 +15,54 @@ if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
 }
 
+// Allowed website origins
 const allowedOrigins = [
-  process.env.FRONTEND_URL,
   "https://madmadisonai.com",
   "https://www.madmadisonai.com",
   "http://localhost:3000",
-].filter(Boolean);
+  ...(process.env.FRONTEND_URL || "").split(","),
+  ...(process.env.FRONTEND_URLS || "").split(","),
+]
+  .map((url) => url.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
 
-// Security headers
+// Allow only known website origins and MADAI Vercel deployments
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+
+  if (allowedOrigins.includes(origin)) {
+    return true;
+  }
+
+  try {
+    const url = new URL(origin);
+
+    if (url.protocol !== "https:") {
+      return false;
+    }
+
+    const host = url.hostname;
+
+    return (
+      /^madai-[a-z0-9-]+-jondenham85-uis-projects\.vercel\.app$/i.test(host) ||
+      /^madison-frontend-[a-z0-9-]+-jondenham85-uis-projects\.vercel\.app$/i.test(host)
+    );
+  } catch {
+    return false;
+  }
+}
+
 app.use(helmet());
 
 // Cross-origin access
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (isAllowedOrigin(origin)) {
         return callback(null, true);
       }
+
+      console.error("CORS origin rejected:", origin);
 
       const error = new Error("Origin not allowed");
       error.status = 403;
