@@ -28,9 +28,11 @@ const allowedOrigins = [
   .map((url) => url.trim().replace(/\/+$/, ""))
   .filter(Boolean);
 
-// Allow only known website origins and MADAI Vercel deployments
+// Allow known website origins and MADAI Vercel deployments
 function isAllowedOrigin(origin) {
-  if (!origin) return true;
+  if (!origin) {
+    return true;
+  }
 
   if (allowedOrigins.includes(origin)) {
     return true;
@@ -58,6 +60,7 @@ function isAllowedOrigin(origin) {
   }
 }
 
+// Security headers
 app.use(helmet());
 
 // Cross-origin access
@@ -79,28 +82,32 @@ app.use(
   })
 );
 
-// Request processing and rate limiting
+// Request parsing
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
+// Request logging
 app.use(
   morgan(
-    process.env.NODE_ENV === "production" ? "combined" : "dev"
+    process.env.NODE_ENV === "production"
+      ? "combined"
+      : "dev"
   )
 );
 
+// Global rate limiting
 app.use(globalLimiter);
 
-// Root health check
+// Root liveness check
 app.get("/", (req, res) => {
-  res.status(200).json({
+  return res.status(200).json({
     status: "online",
     service: "MADAI API",
   });
 });
 
-// Detailed health check, including database connectivity
+// Database-aware health check
 app.get("/api/health", async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -113,6 +120,7 @@ app.get("/api/health", async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
+    // Log detailed database errors only on the server.
     console.error("Database health check failed:", error);
 
     return res.status(503).json({
@@ -125,12 +133,21 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// Authentication
+// Existing authentication routes
 app.use("/api/auth", require("./routes/auth"));
 
-// AI chat
+// Existing AI routes
 app.use("/api/ai", require("./routes/ai"));
 
 // Return JSON for unknown routes
-app.use((req, res)
+app.use((req, res) => {
+  return res.status(404).json({
+    error: "Route not found",
+  });
+});
+
+// Centralized error handling
+app.use(errorHandler);
+
+module.exports = app;
 
