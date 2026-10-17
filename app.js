@@ -3,11 +3,13 @@ const helmet = require("helmet");
 const cors = require("cors");
 const morgan = require("morgan");
 const cookieParser = require("cookie-parser");
+const { PrismaClient } = require("@prisma/client");
 
 const { globalLimiter } = require("./middleware/rateLimiter");
 const errorHandler = require("./middleware/errorHandler");
 
 const app = express();
+const prisma = new PrismaClient();
 
 app.disable("x-powered-by");
 
@@ -44,8 +46,12 @@ function isAllowedOrigin(origin) {
     const host = url.hostname;
 
     return (
-      /^madai-[a-z0-9-]+-jondenham85-uis-projects\.vercel\.app$/i.test(host) ||
-      /^madison-frontend-[a-z0-9-]+-jondenham85-uis-projects\.vercel\.app$/i.test(host)
+      /^madai-[a-z0-9-]+-jondenham85-uis-projects\.vercel\.app$/i.test(
+        host
+      ) ||
+      /^madison-frontend-[a-z0-9-]+-jondenham85-uis-projects\.vercel\.app$/i.test(
+        host
+      )
     );
   } catch {
     return false;
@@ -94,14 +100,29 @@ app.get("/", (req, res) => {
   });
 });
 
-// Detailed health check
-app.get("/api/health", (req, res) => {
-  res.status(200).json({
-    status: "online",
-    service: "MADAI API",
-    version: "1.0.0",
-    timestamp: new Date().toISOString(),
-  });
+// Detailed health check, including database connectivity
+app.get("/api/health", async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+
+    return res.status(200).json({
+      status: "online",
+      database: "connected",
+      service: "MADAI API",
+      version: "1.0.0",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Database health check failed:", error);
+
+    return res.status(503).json({
+      status: "degraded",
+      database: "disconnected",
+      service: "MADAI API",
+      version: "1.0.0",
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 // Authentication
@@ -111,13 +132,5 @@ app.use("/api/auth", require("./routes/auth"));
 app.use("/api/ai", require("./routes/ai"));
 
 // Return JSON for unknown routes
-app.use((req, res) => {
-  res.status(404).json({
-    error: "Route not found",
-  });
-});
+app.use((req, res)
 
-// Centralized error handling
-app.use(errorHandler);
-
-module.exports = app;
