@@ -1,25 +1,31 @@
-const { app, prisma } = require("./app");
+
+require("dotenv").config();
+
+const http = require("http");
+const app = require("./app");
 
 const PORT = process.env.PORT || 10000;
 
-const server = app.listen(PORT, "0.0.0.0", () => {
+const server = http.createServer(app);
+
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`MADAI backend running on port ${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/api/health\`);
+  console.log(`Health check: http://localhost:${PORT}/api/health`);
 });
 
-async function shutdown(signal) {
-  console.log(`${signal} received. Shutting down...`);
+server.on("error", (error) => {
+  console.error("Server startup error:", error);
+  process.exit(1);
+});
 
-  server.close(async () => {
-    try {
-      await prisma.$disconnect();
-    } catch (error) {
-      console.error("Error disconnecting Prisma:", error);
-    }
-
-    process.exit(0);
+process.on("SIGTERM", () => {
+  server.close(() => {
+    console.log("Server closed gracefully");
   });
-}
+});
 
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGINT", () => {
+  server.close(() => {
+    console.log("Server closed gracefully");
+  });
+});
