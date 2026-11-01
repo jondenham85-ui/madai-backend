@@ -9,11 +9,14 @@ function authorizeRoles(...allowedRoles) {
       });
     }
 
-    const currentRole = req.user.role;
-    const userLevel = roleHierarchy[currentRole] ?? 0;
-    const allowedLevel = Math.max(...allowedRoles.map((role) => roleHierarchy[role] ?? 0));
+    const userRole = req.user.role;
+    const userLevel = roleHierarchy[userRole] ?? 0;
+    const canAccess = allowedRoles.some((role) => {
+      const requiredRoleLevel = roleHierarchy[role] ?? 0;
+      return userLevel >= requiredRoleLevel;
+    });
 
-    if (userLevel < allowedLevel) {
+    if (!canAccess) {
       return res.status(403).json({
         success: false,
         error: "You do not have permission to access this resource",

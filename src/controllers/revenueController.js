@@ -1,34 +1,24 @@
-const memoryService = require("../services/memoryService");
+const revenueService = require("../services/revenueService");
 
-async function listMemories(req, res, next) {
+async function listRevenue(req, res, next) {
   try {
-    const memories = await memoryService.listMemories(req.user.id, req.query.category);
-    return res.status(200).json({ success: true, memories });
+    const data = await revenueService.listRevenue(req.user.id);
+    return res.status(200).json({ success: true, ...data });
   } catch (error) {
     return next(error);
   }
 }
 
-async function createMemory(req, res, next) {
+async function createRevenue(req, res, next) {
   try {
-    const memory = await memoryService.createMemory(req.user.id, req.body);
-    return res.status(201).json({ success: true, memory });
-  } catch (error) {
-    return next(error);
-  }
-}
-
-async function deleteMemory(req, res, next) {
-  try {
-    const result = await memoryService.deleteMemory(req.user.id, req.params.id);
-    return res.status(200).json(result);
+    const report = await revenueService.createRevenue(req.user.id, req.body);
+    return res.status(201).json({ success: true, report });
   } catch (error) {
     return next(error);
   }
 }
 
 module.exports = {
-  listMemories,
-  createMemory,
-  deleteMemory,
+  listRevenue,
+  createRevenue,
 };
