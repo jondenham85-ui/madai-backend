@@ -6,6 +6,7 @@ const prisma = new PrismaClient();
 async function requireAuth(req, res, next) {
   try {
     const token =
+      req.cookies?.madai_session ||
       req.cookies?.madsi_session ||
       req.headers.authorization?.replace(/^Bearer\s+/i, "");
 

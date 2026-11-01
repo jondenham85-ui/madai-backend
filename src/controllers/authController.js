@@ -4,6 +4,8 @@ const jwt = require("jsonwebtoken");
 
 const prisma = new PrismaClient();
 
+const COOKIE_NAME = "madai_session";
+
 function publicUser(user) {
   return {
     id: user.id,
@@ -43,95 +45,129 @@ function generateToken(user) {
   );
 }
 
-async function signup({ name, email, password }) {
-  const safeName = String(name || "").trim();
-  const safeEmail = String(email || "").trim().toLowerCase();
-  const safePassword = String(password || "");
+async function signup(req, res, next) {
+  try {
+    const name = String(req.body?.name || "").trim();
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const password = String(req.body?.password || "");
 
-  if (!safeName || !safeEmail || !safePassword) {
-    const error = new Error("Name, email, and password are required");
-    error.status = 400;
-    throw error;
+    if (!name || !email || !password) {
+      const error = new Error("Name, email, and password are required");
+      error.status = 400;
+      throw error;
+    }
+
+    if (password.length < 8) {
+      const error = new Error("Password must be at least 8 characters long");
+      error.status = 400;
+      throw error;
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      const error = new Error("An account with this email already exists");
+      error.status = 409;
+      throw error;
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        passwordHash,
+        role: "USER",
+      },
+    });
+
+    const token = generateToken(user);
+    res.cookie(COOKIE_NAME, token, cookieOptions());
+
+    return res.status(201).json({
+      success: true,
+      user: publicUser(user),
+    });
+  } catch (error) {
+    return next(error);
   }
+}
 
-  if (safePassword.length < 8) {
-    const error = new Error("Password must be at least 8 characters long");
-    error.status = 400;
-    throw error;
+async function login(req, res, next) {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const password = String(req.body?.password || "");
+
+    if (!email || !password) {
+      const error = new Error("Email and password are required");
+      error.status = 400;
+      throw error;
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      const error = new Error("Invalid email or password");
+      error.status = 401;
+      throw error;
+    }
+
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isValid) {
+      const error = new Error("Invalid email or password");
+      error.status = 401;
+      throw error;
+    }
+
+    const token = generateToken(user);
+    res.cookie(COOKIE_NAME, token, cookieOptions());
+
+    return res.status(200).json({
+      success: true,
+      user: publicUser(user),
+    });
+  } catch (error) {
+    return next(error);
   }
+}
 
-  const existingUser = await prisma.user.findUnique({ where: { email: safeEmail } });
-  if (existingUser) {
-    const error = new Error("An account with this email already exists");
-    error.status = 409;
-    throw error;
-  }
-
-  const passwordHash = await bcrypt.hash(safePassword, 12);
-  const user = await prisma.user.create({
-    data: {
-      name: safeName,
-      email: safeEmail,
-      passwordHash,
-      role: "USER",
-    },
+async function logout(req, res) {
+  res.clearCookie(COOKIE_NAME, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    path: "/",
   });
 
-  return {
-    user: publicUser(user),
-    token: generateToken(user),
-    cookieOptions: cookieOptions(),
-  };
+  return res.status(200).json({
+    success: true,
+    message: "Logged out",
+  });
 }
 
-async function login({ email, password }) {
-  const safeEmail = String(email || "").trim().toLowerCase();
-  const safePassword = String(password || "");
+async function me(req, res, next) {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) {
+      const error = new Error("User not found");
+      error.status = 404;
+      throw error;
+    }
 
-  if (!safeEmail || !safePassword) {
-    const error = new Error("Email and password are required");
-    error.status = 400;
-    throw error;
+    return res.status(200).json({
+      success: true,
+      user: publicUser(user),
+    });
+  } catch (error) {
+    return next(error);
   }
-
-  const user = await prisma.user.findUnique({ where: { email: safeEmail } });
-  if (!user) {
-    const error = new Error("Invalid email or password");
-    error.status = 401;
-    throw error;
-  }
-
-  const isValid = await bcrypt.compare(safePassword, user.passwordHash);
-  if (!isValid) {
-    const error = new Error("Invalid email or password");
-    error.status = 401;
-    throw error;
-  }
-
-  return {
-    user: publicUser(user),
-    token: generateToken(user),
-    cookieOptions: cookieOptions(),
-  };
-}
-
-async function me(userId) {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-
-  if (!user) {
-    const error = new Error("User not found");
-    error.status = 404;
-    throw error;
-  }
-
-  return publicUser(user);
 }
 
 module.exports = {
   signup,
   login,
+  logout,
   me,
   publicUser,
   cookieOptions,
   generateToken,
+  COOKIE_NAME,
 };
