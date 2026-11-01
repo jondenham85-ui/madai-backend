@@ -19,14 +19,14 @@ server.on("error", (error) => {
 
 process.on("SIGINT", () => {
   server.close(() => {
-    console.log("Server shutdown complete");
+    console.log("MADSI backend shutdown complete");
     process.exit(0);
   });
 });
 
 process.on("SIGTERM", () => {
   server.close(() => {
-    console.log("Server shutdown complete");
+    console.log("MADSI backend shutdown complete");
     process.exit(0);
   });
 });

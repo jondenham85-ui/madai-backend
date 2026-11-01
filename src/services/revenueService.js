@@ -2,8 +2,9 @@ const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient();
 
-function toNumber(value) {
-  return Number(value); 
+function numberValue(value) {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) ? amount : 0;
 }
 
 async function listRevenue(userId) {
@@ -14,69 +15,52 @@ async function listRevenue(userId) {
 
   const totals = reports.reduce(
     (acc, report) => {
-      acc.amount += toNumber(report.amount);
+      acc.amount += numberValue(report.amount);
       acc.count += 1;
       return acc;
     },
     { amount: 0, count: 0 }
   );
 
-  const daily = [];
-  const weekly = [];
-  const monthly = [];
-  const yearly = [];
-
-  const dateMap = new Map();
+  const daily = new Map();
+  const monthly = new Map();
+  const yearly = new Map();
 
   for (const report of reports) {
     const date = new Date(report.date);
-    const keyDay = date.toISOString().slice(0, 10);
-    const keyMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    const keyYear = String(date.getFullYear());
+    const dayKey = date.toISOString().slice(0, 10);
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const yearKey = String(date.getFullYear());
 
-    dateMap.set(keyDay, (dateMap.get(keyDay) || 0) + toNumber(report.amount));
-    dateMap.set(`month:${keyMonth}`, (dateMap.get(`month:${keyMonth}`) || 0) + toNumber(report.amount));
-    dateMap.set(`year:${keyYear}`, (dateMap.get(`year:${keyYear}`) || 0) + toNumber(report.amount));
+    daily.set(dayKey, (daily.get(dayKey) || 0) + numberValue(report.amount));
+    monthly.set(monthKey, (monthly.get(monthKey) || 0) + numberValue(report.amount));
+    yearly.set(yearKey, (yearly.get(yearKey) || 0) + numberValue(report.amount));
   }
 
-  for (const [key, value] of dateMap.entries()) {
-    if (!key.includes("month:") && !key.includes("year:")) {
-      daily.push({ date: key, amount: value });
-    }
-    if (key.includes("month:")) {
-      monthly.push({ month: key.replace("month:", ""), amount: value });
-    }
-    if (key.includes("year:")) {
-      yearly.push({ year: key.replace("year:", ""), amount: value });
-    }
-  }
-
-  const trend = reports.length
-    ? {
-        current: totals.amount,
-        previous: Math.max(0, totals.amount - reports.at(-1)?.amount || 0),
-        growth: 0,
-      }
-    : { current: 0, previous: 0, growth: 0 };
+  const previousRevenue = reports.length ? Math.max(0, totals.amount - numberValue(reports[reports.length - 1].amount)) : 0;
+  const growth = totals.amount === 0 ? 0 : ((totals.amount - previousRevenue) / Math.max(totals.amount, 1)) * 100;
 
   return {
-    daily: daily.sort((a, b) => a.date.localeCompare(b.date)),
-    weekly: weekly.length ? weekly : [{ week: "current", amount: totals.amount }],
-    monthly: monthly.sort((a, b) => a.month.localeCompare(b.month)),
-    yearly: yearly.sort((a, b) => a.year.localeCompare(b.year)),
+    daily: Array.from(daily.entries()).map(([date, amount]) => ({ date, amount })),
+    weekly: [{ week: "current", amount: totals.amount }],
+    monthly: Array.from(monthly.entries()).map(([month, amount]) => ({ month, amount })),
+    yearly: Array.from(yearly.entries()).map(([year, amount]) => ({ year, amount })),
     totals: {
       amount: totals.amount,
       count: totals.count,
       average: totals.count ? totals.amount / totals.count : 0,
     },
-    trend,
+    trend: {
+      current: totals.amount,
+      previous: previousRevenue,
+      growth: Number(growth.toFixed(2)),
+    },
   };
 }
 
 async function createRevenue(userId, payload) {
-  const amount = Number(payload.amount || 0);
-  const type = String(payload.type || "sale").trim();
-  const date = payload.date ? new Date(payload.date) : new Date();
+  const amount = numberValue(payload?.amount);
+  const type = String(payload?.type || "").trim();
 
   if (!amount || !type) {
     const error = new Error("Type and amount are required");
@@ -84,19 +68,17 @@ async function createRevenue(userId, payload) {
     throw error;
   }
 
-  const report = await prisma.revenueReport.create({
+  return prisma.revenueReport.create({
     data: {
       userId,
-      date,
+      date: payload?.date ? new Date(payload.date) : new Date(),
       type,
       amount,
-      currency: payload.currency || "USD",
-      source: payload.source || "manual",
-      notes: payload.notes || null,
+      currency: String(payload?.currency || "USD"),
+      source: payload?.source || "manual",
+      notes: payload?.notes || null,
     },
   });
-
-  return report;
 }
 
 module.exports = {

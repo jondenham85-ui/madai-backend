@@ -1,5 +1,8 @@
 function errorHandler(err, req, res, next) {
-  const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
+  const status =
+    Number.isInteger(err.status) && err.status >= 400 && err.status < 600
+      ? err.status
+      : 500;
 
   const payload = {
     success: false,

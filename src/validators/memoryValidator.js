@@ -1,7 +1,7 @@
-const { validate } = require("./authValidator");
+const { validateRequiredFields } = require("./authValidator");
 
-const memoryValidator = validate(["category", "value"]);
+const synthValidator = validateRequiredFields(["prompt"]);
 
 module.exports = {
-  memoryValidator,
+  synthValidator,
 };

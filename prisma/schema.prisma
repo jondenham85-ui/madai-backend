@@ -32,15 +32,16 @@ enum DirectiveStatus {
 }
 
 model User {
-  id           String    @id @default(uuid())
+  id           String         @id @default(uuid())
   name         String?
-  email        String    @unique
+  email        String         @unique
   passwordHash String
-  role         Role      @default(USER)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  role         Role           @default(USER)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
   conversations Conversation[]
+  messages      Message[]
   memories      Memory[]
   directives    Directive[]
   notifications Notification[]
@@ -57,8 +58,8 @@ model Conversation {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages  Message[]
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
 
   @@index([userId, createdAt])
 }
@@ -66,14 +67,17 @@ model Conversation {
 model Message {
   id             String       @id @default(uuid())
   conversationId String
+  userId         String?
   role           String
   content        String       @db.Text
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([conversationId, createdAt])
+  @@index([userId])
 }
 
 model Memory {
@@ -125,16 +129,16 @@ model RevenueReport {
 }
 
 model Notification {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   userId    String
   type      String
   title     String
-  message   String   @db.Text
+  message   String    @db.Text
   readAt    DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt])
 }

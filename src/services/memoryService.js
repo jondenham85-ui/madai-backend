@@ -2,11 +2,13 @@ const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient();
 
+const validCategories = ["PERSONAL", "BUSINESS", "REVENUE", "SHOPMAD", "SYSTEM"];
+
 async function listMemories(userId, category) {
   const memories = await prisma.memory.findMany({
     where: {
       userId,
-      ...(category ? { category } : {}),
+      ...(category ? { category: String(category).toUpperCase() } : {}),
     },
     orderBy: { createdAt: "desc" },
   });
@@ -15,8 +17,8 @@ async function listMemories(userId, category) {
 }
 
 async function createMemory(userId, payload) {
-  const category = String(payload.category || "").toUpperCase();
-  const value = String(payload.value || "").trim();
+  const category = String(payload?.category || "").trim().toUpperCase();
+  const value = String(payload?.value || "").trim();
 
   if (!category || !value) {
     const error = new Error("Category and value are required");
@@ -24,30 +26,20 @@ async function createMemory(userId, payload) {
     throw error;
   }
 
-  const validCategories = [
-    "PERSONAL",
-    "BUSINESS",
-    "REVENUE",
-    "SHOPMAD",
-    "SYSTEM",
-  ];
-
   if (!validCategories.includes(category)) {
     const error = new Error("Invalid memory category");
     error.status = 400;
     throw error;
   }
 
-  const memory = await prisma.memory.create({
+  return prisma.memory.create({
     data: {
       userId,
       category,
       value,
-      metadata: payload.metadata || {},
+      metadata: payload?.metadata || {},
     },
   });
-
-  return memory;
 }
 
 async function deleteMemory(userId, memoryId) {
@@ -62,7 +54,11 @@ async function deleteMemory(userId, memoryId) {
   }
 
   await prisma.memory.delete({ where: { id: memoryId } });
-  return { success: true, id: memoryId };
+
+  return {
+    success: true,
+    id: memoryId,
+  };
 }
 
 module.exports = {

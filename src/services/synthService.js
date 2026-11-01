@@ -3,7 +3,8 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
 async function processPrompt(user, payload) {
-  const prompt = String(payload.prompt || "").trim();
+  const prompt = String(payload?.prompt || "").trim();
+
   if (!prompt) {
     const error = new Error("Prompt is required");
     error.status = 400;
@@ -29,6 +30,8 @@ async function processPrompt(user, payload) {
     },
   });
 
+  await storeMemory(user.id, prompt, "SYSTEM");
+
   return {
     success: true,
     answer,
@@ -44,11 +47,44 @@ async function loadContext(userId) {
     take: 5,
   });
 
-  return memories.length
-    ? memories
-        .map((memory) => `${memory.category}: ${memory.value}`)
-        .join("\n")
-    : "No recent context available.";
+  if (!memories.length) {
+    return "No recent memory context available.";
+  }
+
+  return memories
+    .map((memory) => `${memory.category}: ${memory.value}`)
+    .join("\n");
+}
+
+async function saveConversation(userId, prompt, answer) {
+  return prisma.conversation.create({
+    data: {
+      userId,
+      title: prompt.slice(0, 80),
+      messages: {
+        create: [
+          { role: "user", content: prompt },
+          { role: "assistant", content: answer },
+        ],
+      },
+    },
+    include: {
+      messages: true,
+    },
+  });
+}
+
+async function storeMemory(userId, value, category = "SYSTEM") {
+  return prisma.memory.create({
+    data: {
+      userId,
+      value,
+      category,
+      metadata: {
+        createdBy: "synth",
+      },
+    },
+  });
 }
 
 async function generateAnswer(prompt, context) {
@@ -66,11 +102,11 @@ async function generateAnswer(prompt, context) {
             {
               role: "system",
               content:
-                "You are MADSI, a helpful synthetic intelligence assistant. Be helpful, concise, and practical.",
+                "You are MADSI, a helpful synthetic intelligence assistant. Keep answers clear, actionable, and concise.",
             },
             {
               role: "user",
-              content: `Context:\n${context}\n\nUser prompt:\n${prompt}`,
+              content: `Context:\n${context}\n\nUser message:\n${prompt}`,
             },
           ],
           temperature: 0.7,
@@ -78,24 +114,27 @@ async function generateAnswer(prompt, context) {
       });
 
       const data = await response.json();
+
       if (!response.ok) {
         throw new Error(data?.error?.message || "OpenAI request failed");
       }
 
       return (
         data?.choices?.[0]?.message?.content ||
-        "I could not generate a response right now."
+        "I am unable to generate a response right now."
       );
     } catch (error) {
       console.error("OpenAI request error:", error.message);
     }
   }
 
-  return `MADSI response: I have processed your prompt: "${prompt.slice(0, 120)}". This backend is ready for production use with OpenAI integration enabled via environment variables.`;
+  return `MADSI response: I have processed your prompt: "${prompt.slice(0, 120)}". The backend is ready for production use and is compatible with OpenAI integration via environment variables.`;
 }
 
 module.exports = {
   processPrompt,
   loadContext,
+  saveConversation,
+  storeMemory,
   generateAnswer,
 };

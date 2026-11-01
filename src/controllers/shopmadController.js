@@ -1,24 +1,14 @@
-const shopmadService = require("../services/shopmadService");
+const analyticsService = require("../services/analyticsService");
 
-async function getProducts(req, res, next) {
+async function getAnalytics(req, res, next) {
   try {
-    const products = await shopmadService.getProducts();
-    return res.status(200).json({ success: true, products });
-  } catch (error) {
-    return next(error);
-  }
-}
-
-async function getOrders(req, res, next) {
-  try {
-    const orders = await shopmadService.getOrders();
-    return res.status(200).json({ success: true, orders });
+    const analytics = await analyticsService.getAnalytics(req.user.id);
+    return res.status(200).json({ success: true, ...analytics });
   } catch (error) {
     return next(error);
   }
 }
 
 module.exports = {
-  getProducts,
-  getOrders,
+  getAnalytics,
 };

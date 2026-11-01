@@ -6,7 +6,7 @@ const { PrismaClient } = require("@prisma/client");
 
 const { globalLimiter } = require("./middleware/rateLimit");
 const errorHandler = require("./middleware/errorHandler");
-const authMiddleware = require("./middleware/auth");
+const requireAuth = require("./middleware/auth");
 const { authorizeRoles } = require("./middleware/roles");
 
 const authRoutes = require("./routes/auth");
@@ -25,7 +25,9 @@ app.disable("x-powered-by");
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin) return callback(null, true);
+      if (!origin) {
+        return callback(null, true);
+      }
 
       const allowedOrigins = [
         process.env.FRONTEND_URL,
@@ -62,6 +64,7 @@ app.get("/", (req, res) => {
 app.get("/api/health", async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
+
     return res.status(200).json({
       status: "ok",
       database: "connected",
@@ -77,14 +80,14 @@ app.get("/api/health", async (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
-app.use("/api/synth", authMiddleware, synthRoutes);
-app.use("/api/memory", authMiddleware, memoryRoutes);
-app.use("/api/revenue", authMiddleware, revenueRoutes);
-app.use("/api/analytics", authMiddleware, analyticsRoutes);
-app.use("/api/shopmad", authMiddleware, shopmadRoutes);
+app.use("/api/synth", requireAuth, synthRoutes);
+app.use("/api/memory", requireAuth, memoryRoutes);
+app.use("/api/revenue", requireAuth, revenueRoutes);
+app.use("/api/analytics", requireAuth, analyticsRoutes);
+app.use("/api/shopmad", requireAuth, shopmadRoutes);
 app.use(
   "/api/admin",
-  authMiddleware,
+  requireAuth,
   authorizeRoles("OWNER", "CO_OWNER", "FAMILY_ADMIN", "ADMIN"),
   adminRoutes
 );

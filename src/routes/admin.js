@@ -1,5 +1,9 @@
 const express = require("express");
-const { getUsers, getDirectives, getSystemSummary } = require("../controllers/adminController");
+const {
+  getUsers,
+  getDirectives,
+  getSystemSummary,
+} = require("../controllers/adminController");
 
 const router = express.Router();
 

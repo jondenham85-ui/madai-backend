@@ -1,34 +1,24 @@
-const adminService = require("../services/adminService");
+const shopmadService = require("../services/shopmadService");
 
-async function getUsers(req, res, next) {
+async function getProducts(req, res, next) {
   try {
-    const users = await adminService.listUsers();
-    return res.status(200).json({ success: true, users });
+    const products = await shopmadService.getProducts();
+    return res.status(200).json({ success: true, products });
   } catch (error) {
     return next(error);
   }
 }
 
-async function getDirectives(req, res, next) {
+async function getOrders(req, res, next) {
   try {
-    const directives = await adminService.listDirectives();
-    return res.status(200).json({ success: true, directives });
-  } catch (error) {
-    return next(error);
-  }
-}
-
-async function getSystemSummary(req, res, next) {
-  try {
-    const summary = await adminService.getSystemSummary();
-    return res.status(200).json({ success: true, ...summary });
+    const orders = await shopmadService.getOrders();
+    return res.status(200).json({ success: true, orders });
   } catch (error) {
     return next(error);
   }
 }
 
 module.exports = {
-  getUsers,
-  getDirectives,
-  getSystemSummary,
+  getProducts,
+  getOrders,
 };
