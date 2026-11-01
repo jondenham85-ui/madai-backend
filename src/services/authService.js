@@ -1,135 +1,108 @@
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+const cookieParser = require("cookie-parser");
 const { PrismaClient } = require("@prisma/client");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
+
+const { globalLimiter } = require("./middleware/rateLimit");
+const errorHandler = require("./middleware/errorHandler");
+const requireAuth = require("./middleware/auth");
+const { authorizeRoles } = require("./middleware/roles");
+
+const authRoutes = require("./routes/auth");
+const synthRoutes = require("./routes/synth");
+const memoryRoutes = require("./routes/memory");
+const revenueRoutes = require("./routes/revenue");
+const analyticsRoutes = require("./routes/analytics");
+const shopmadRoutes = require("./routes/shopmad");
+const adminRoutes = require("./routes/admin");
 
 const prisma = new PrismaClient();
+const app = express();
 
-function publicUser(user) {
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
-  };
+app.disable("x-powered-by");
+
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
 }
 
-function cookieOptions() {
-  return {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  };
-}
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) {
+        return callback(null, true);
+      }
 
-function generateToken(user) {
-  if (!process.env.JWT_SECRET) {
-    throw new Error("JWT_SECRET is not configured");
-  }
+      const allowedOrigins = [
+        process.env.FRONTEND_URL,
+        "http://localhost:3000",
+        "https://localhost:3000",
+      ].filter(Boolean);
 
-  return jwt.sign(
-    {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Origin not allowed"));
     },
-    process.env.JWT_SECRET,
-    { expiresIn: "7d" }
-  );
-}
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
-async function signup({ name, email, password }) {
-  const safeName = String(name || "").trim();
-  const safeEmail = String(email || "").trim().toLowerCase();
-  const safePassword = String(password || "");
+app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+app.use(globalLimiter);
 
-  if (!safeName || !safeEmail || !safePassword) {
-    const error = new Error("Name, email, and password are required");
-    error.status = 400;
-    throw error;
-  }
-
-  if (safePassword.length < 8) {
-    const error = new Error("Password must be at least 8 characters long");
-    error.status = 400;
-    throw error;
-  }
-
-  const existingUser = await prisma.user.findUnique({ where: { email: safeEmail } });
-  if (existingUser) {
-    const error = new Error("An account with this email already exists");
-    error.status = 409;
-    throw error;
-  }
-
-  const passwordHash = await bcrypt.hash(safePassword, 12);
-  const user = await prisma.user.create({
-    data: {
-      name: safeName,
-      email: safeEmail,
-      passwordHash,
-      role: "USER",
-    },
+app.get("/", (req, res) => {
+  res.json({
+    service: "MADSI Backend",
+    status: "ok",
+    message: "MADSI API is running",
   });
+});
 
-  return {
-    user: publicUser(user),
-    token: generateToken(user),
-    cookieOptions: cookieOptions(),
-  };
-}
-
-async function login({ email, password }) {
-  const safeEmail = String(email || "").trim().toLowerCase();
-  const safePassword = String(password || "");
-
-  if (!safeEmail || !safePassword) {
-    const error = new Error("Email and password are required");
-    error.status = 400;
-    throw error;
+app.get("/api/health", async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return res.status(200).json({
+      status: "ok",
+      database: "connected",
+      uptime: Number(process.uptime().toFixed(2)),
+    });
+  } catch (error) {
+    return res.status(503).json({
+      status: "error",
+      database: "unavailable",
+      uptime: Number(process.uptime().toFixed(2)),
+    });
   }
+});
 
-  const user = await prisma.user.findUnique({ where: { email: safeEmail } });
-  if (!user) {
-    const error = new Error("Invalid email or password");
-    error.status = 401;
-    throw error;
-  }
+app.use("/api/auth", authRoutes);
+app.use("/api/synth", requireAuth, synthRoutes);
+app.use("/api/memory", requireAuth, memoryRoutes);
+app.use("/api/revenue", requireAuth, revenueRoutes);
+app.use("/api/analytics", requireAuth, analyticsRoutes);
+app.use("/api/shopmad", requireAuth, shopmadRoutes);
+app.use(
+  "/api/admin",
+  requireAuth,
+  authorizeRoles("OWNER", "CO_OWNER", "FAMILY_ADMIN", "ADMIN"),
+  adminRoutes
+);
 
-  const isValid = await bcrypt.compare(safePassword, user.passwordHash);
-  if (!isValid) {
-    const error = new Error("Invalid email or password");
-    error.status = 401;
-    throw error;
-  }
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: "Route not found",
+    path: req.originalUrl,
+  });
+});
 
-  return {
-    user: publicUser(user),
-    token: generateToken(user),
-    cookieOptions: cookieOptions(),
-  };
-}
+app.use(errorHandler);
 
-async function me(userId) {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-
-  if (!user) {
-    const error = new Error("User not found");
-    error.status = 404;
-    throw error;
-  }
-
-  return publicUser(user);
-}
-
-module.exports = {
-  signup,
-  login,
-  me,
-  publicUser,
-  cookieOptions,
-  generateToken,
-};
+module.exports = app;

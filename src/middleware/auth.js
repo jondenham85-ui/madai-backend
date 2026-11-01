@@ -1,39 +1,50 @@
-const jwt = require("jsonwebtoken");
-const { PrismaClient } = require("@prisma/client");
+const authService = require("../services/authService");
 
-const prisma = new PrismaClient();
-
-async function requireAuth(req, res, next) {
+async function signup(req, res, next) {
   try {
-    const token =
-      req.cookies?.madsi_session ||
-      req.headers.authorization?.replace(/^Bearer\s+/i, "");
-
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        error: "Authentication required",
-      });
-    }
-
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        error: "Invalid session",
-      });
-    }
-
-    req.user = user;
-    return next();
+    const result = await authService.signup(req.body);
+    res.cookie("madsi_session", result.token, result.cookieOptions);
+    return res.status(201).json({ success: true, user: result.user });
   } catch (error) {
-    return res.status(401).json({
-      success: false,
-      error: "Invalid or expired session",
-    });
+    return next(error);
   }
 }
 
-module.exports = requireAuth;
+async function login(req, res, next) {
+  try {
+    const result = await authService.login(req.body);
+    res.cookie("madsi_session", result.token, result.cookieOptions);
+    return res.status(200).json({ success: true, user: result.user });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function logout(req, res) {
+  const isProduction = process.env.NODE_ENV === "production";
+
+  res.clearCookie("madsi_session", {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    path: "/",
+  });
+
+  return res.status(200).json({ success: true, message: "Logged out" });
+}
+
+async function me(req, res, next) {
+  try {
+    const profile = await authService.me(req.user.id);
+    return res.status(200).json({ success: true, user: profile });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = {
+  signup,
+  login,
+  logout,
+  me,
+};

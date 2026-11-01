@@ -1,9 +1,16 @@
-const { validateRequiredFields } = require("../validators/authValidator");
+const express = require("express");
+const { authLimiter } = require("../middleware/rateLimit");
+const { signup, login, logout, me } = require("../controllers/authController");
+const { signupValidator, loginValidator } = require("../validators/authValidator");
+const requireAuth = require("../middleware/auth");
 
-const signupValidator = validateRequiredFields(["name", "email", "password"]);
-const loginValidator = validateRequiredFields(["email", "password"]);
+const router = express.Router();
 
-module.exports = {
-  signupValidator,
-  loginValidator,
-};
+router.use(authLimiter);
+
+router.post("/signup", signupValidator, signup);
+router.post("/login", loginValidator, login);
+router.post("/logout", requireAuth, logout);
+router.get("/me", requireAuth, me);
+
+module.exports = router;

@@ -1,16 +1,39 @@
-const express = require("express");
-const { authLimiter } = require("../middleware/rateLimit");
-const { signup, login, logout, me } = require("../controllers/authController");
-const { signupValidator, loginValidator } = require("../validators/authValidator");
-const requireAuth = require("../middleware/auth");
+const jwt = require("jsonwebtoken");
+const { PrismaClient } = require("@prisma/client");
 
-const router = express.Router();
+const prisma = new PrismaClient();
 
-router.use(authLimiter);
+async function requireAuth(req, res, next) {
+  try {
+    const token =
+      req.cookies?.madsi_session ||
+      req.headers.authorization?.replace(/^Bearer\s+/i, "");
 
-router.post("/signup", signupValidator, signup);
-router.post("/login", loginValidator, login);
-router.post("/logout", requireAuth, logout);
-router.get("/me", requireAuth, me);
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        error: "Authentication required",
+      });
+    }
 
-module.exports = router;
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid session",
+      });
+    }
+
+    req.user = user;
+    return next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      error: "Invalid or expired session",
+    });
+  }
+}
+
+module.exports = requireAuth;
