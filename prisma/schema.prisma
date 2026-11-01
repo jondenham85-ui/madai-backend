@@ -8,21 +8,145 @@ datasource db {
 }
 
 enum Role {
-  admin
-  developer
-  operator
-  user
+  OWNER
+  CO_OWNER
+  FAMILY_ADMIN
+  ADMIN
+  USER
+}
 
-  @@map("Role")
+enum MemoryCategory {
+  PERSONAL
+  BUSINESS
+  REVENUE
+  SHOPMAD
+  SYSTEM
+}
+
+enum DirectiveStatus {
+  NEW
+  ACTIVE
+  PAUSED
+  COMPLETED
+  FAILED
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  email        String   @unique
-  passwordHash String   @map("password")
-  role         Role     @default(user)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id           String    @id @default(uuid())
+  name         String?
+  email        String    @unique
+  passwordHash String
+  role         Role      @default(USER)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  @@map("User")
+  conversations Conversation[]
+  memories      Memory[]
+  directives    Directive[]
+  notifications Notification[]
+  revenueReports RevenueReport[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Conversation {
+  id        String    @id @default(uuid())
+  userId    String
+  title     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@index([userId, createdAt])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  role           String
+  content        String       @db.Text
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+model Memory {
+  id        String         @id @default(uuid())
+  userId    String
+  category  MemoryCategory
+  value     String         @db.Text
+  metadata  Json?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, category])
+  @@index([userId, createdAt])
+}
+
+model Directive {
+  id          String          @id @default(uuid())
+  userId      String
+  title       String
+  description String?         @db.Text
+  status      DirectiveStatus @default(NEW)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+}
+
+model RevenueReport {
+  id        String   @id @default(uuid())
+  userId    String
+  date      DateTime
+  type      String
+  amount    Decimal  @db.Decimal(12, 2)
+  currency  String   @default("USD")
+  source    String?
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@index([type, date])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  message   String   @db.Text
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
+
+model SystemMetric {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  value     String
+  label     String?
+  unit      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
 }
