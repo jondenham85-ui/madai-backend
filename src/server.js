@@ -10,10 +10,6 @@ const server = http.createServer(app);
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`MADSI backend running on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/api/health`);
-  console.info("MADSI_OPENAI_PROXY_CONFIG", {
-    openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
-    reservationAuthConfigured: Boolean(process.env.MADSI_SUPABASE_URL && process.env.MADSI_SUPABASE_PUBLISHABLE_KEY),
-  });
 });
 
 server.on("error", (error) => {
