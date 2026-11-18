@@ -13,4 +13,4 @@ jobs:
           node-version: 24
       - run: npm install
       - run: npm test
-      - run: node --check src/app.js && node --check src/routes/madsiOpenAI.js && node --check src/server.js
+      - run: node --check src/madsiProxyServer.js && node --check src/routes/madsiOpenAI.js
