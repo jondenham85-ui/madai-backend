@@ -8,8 +8,6 @@ const { PrismaClient } = require("@prisma/client");
 const { signup, login, logout, me } = require("./controllers/authController");
 const { handlePrompt } = require("./controllers/synthController");
 const requireAuth = require("./middleware/auth");
-const { rateLimit } = require("express-rate-limit");
-const { createOpenAIProxyHandler } = require("./routes/madsiOpenAI");
 
 const app = express();
 const prisma = new PrismaClient();
@@ -78,7 +76,6 @@ app.post("/api/auth/signup", signup);
 app.post("/api/auth/login", login);
 app.post("/api/auth/logout", logout);
 app.get("/api/auth/me", requireAuth, me);
-app.post("/api/madsi/openai", rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: "draft-7", legacyHeaders: false }), createOpenAIProxyHandler());
 app.post("/api/synth", requireAuth, handlePrompt);
 
 app.use((req, res) => {
